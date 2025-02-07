@@ -398,8 +398,13 @@ func GenerateGoSchema(sref *openapi3.SchemaRef, path []string) (Schema, error) {
 				}
 
 				required := StringInArray(pName, schema.Required)
+				genAnonObj := false
+				if globalState.options.OutputOptions.GenAnonymousObjects {
+					// For anonymous inner objects, define an actual type for them.
+					genAnonObj = len(pSchema.Properties) > 0
+				}
 
-				if (pSchema.HasAdditionalProperties || len(pSchema.UnionElements) != 0) && pSchema.RefType == "" {
+				if (pSchema.HasAdditionalProperties || len(pSchema.UnionElements) != 0 || genAnonObj) && pSchema.RefType == "" {
 					// If we have fields present which have additional properties or union values,
 					// but are not a pre-defined type, we need to define a type
 					// for them, which will be based on the field names we followed
@@ -556,7 +561,32 @@ func oapiSchemaToGoType(schema *openapi3.Schema, path []string, outSchema *Schem
 		if err != nil {
 			return fmt.Errorf("error generating type for array: %w", err)
 		}
-		if (arrayType.HasAdditionalProperties || len(arrayType.UnionElements) != 0) && arrayType.RefType == "" {
+		itemType := schema.Items.Value.Type
+
+		genAnonObj := false
+		if globalState.options.OutputOptions.GenAnonymousObjects {
+			// If this is an array of an anonymous inner object, avoid the
+			// declaration of an arrayed type and just array the object itself.
+			// I.e. this avoids the extra type declaration of:
+			// type Parent_ArrayedAnon = []Parent_ArrayedAnon_Item
+			genAnonObj = schema.Items.Ref == "" && (itemType.Slice() == nil || itemType.Is("object")) && len(path) > 1
+		}
+
+		if genAnonObj && arrayType.RefType == "" {
+			typeName := PathToTypeName(path)
+
+			typeDef := TypeDefinition{
+				TypeName: typeName,
+				JsonName: strings.Join(path, "."),
+				Schema:   arrayType,
+			}
+			arrayType = Schema{
+				GoType:          typeName,
+				AdditionalTypes: arrayType.AdditionalTypes,
+			}
+			arrayType.AdditionalTypes = append(arrayType.AdditionalTypes, typeDef)
+
+		} else if (arrayType.HasAdditionalProperties || len(arrayType.UnionElements) != 0) && arrayType.RefType == "" {
 			// If we have items which have additional properties or union values,
 			// but are not a pre-defined type, we need to define a type
 			// for them, which will be based on the field names we followed

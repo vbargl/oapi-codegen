@@ -248,6 +248,9 @@ type OutputOptions struct {
 
 	// ClientResponseBytesFunction decides whether to enable the generation of a `Bytes()` method on response objects for `ClientWithResponses`
 	ClientResponseBytesFunction bool `yaml:"client-response-bytes-function,omitempty"`
+
+	// GenAnonymousObjects generates separate struct definitions for embedded anonymous objects.
+	GenAnonymousObjects bool `yaml:"gen-anonymous-objs,omitempty"`
 }
 
 func (oo OutputOptions) Validate() map[string]string {
